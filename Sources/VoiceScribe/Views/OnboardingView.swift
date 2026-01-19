@@ -1,4 +1,5 @@
 import SwiftUI
+import ServiceManagement
 
 struct OnboardingView: View {
     @ObservedObject var appState: AppState
@@ -6,7 +7,7 @@ struct OnboardingView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var currentStep = 0
     @State private var hasStartedTinyDownload = false
-    @State private var downloadFailed = false
+    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     init(appState: AppState) {
         self.appState = appState
@@ -27,20 +28,26 @@ struct OnboardingView: View {
             permissionKey: "microphone"
         ),
         OnboardingStep(
-            icon: "keyboard",
-            title: "Input Monitoring",
-            description: "Required to detect when you press and release the Fn key to start/stop recording. Click + in System Settings, select VoiceScribe from Applications, and toggle it on.",
-            permissionKey: "inputMonitoring"
-        ),
-        OnboardingStep(
             icon: "accessibility",
             title: "Accessibility",
             description: "Required to automatically type the transcribed text into whatever app you're using. Without this, text cannot be inserted.",
             permissionKey: "accessibility"
+        ),
+        OnboardingStep(
+            icon: "power",
+            title: "Launch at Login",
+            description: "Start VoiceScribe automatically when you log in. You can change this anytime in Settings.",
+            permissionKey: "launchAtLogin"
+        ),
+        OnboardingStep(
+            icon: "keyboard",
+            title: "Input Monitoring",
+            description: "Required to detect when you press and release the Fn key to start/stop recording. Click + in System Settings, select VoiceScribe from Applications, and toggle it on. This will restart the app.",
+            permissionKey: "inputMonitoring"
         )
     ]
 
-    private let totalSteps = 6 // 1 welcome + 4 permissions + 1 model download
+    private let totalSteps = 6 // 1 welcome + 5 permissions (including launch at login)
 
     var body: some View {
         VStack(spacing: 24) {
@@ -50,10 +57,8 @@ struct OnboardingView: View {
 
             if currentStep == 0 {
                 welcomeContent
-            } else if currentStep <= permissionSteps.count {
-                permissionStepContent
             } else {
-                modelDownloadContent
+                permissionStepContent
             }
 
             Spacer()
@@ -74,13 +79,7 @@ struct OnboardingView: View {
 
         hasStartedTinyDownload = true
         Task {
-            do {
-                try await appState.transcriptionEngine.downloadModel("tiny")
-            } catch {
-                await MainActor.run {
-                    downloadFailed = true
-                }
-            }
+            try? await appState.transcriptionEngine.downloadModel("tiny")
         }
     }
 
@@ -150,9 +149,9 @@ struct OnboardingView: View {
 
                 stepsOverviewRow(number: 1, text: "Files & Folders", icon: "folder.fill")
                 stepsOverviewRow(number: 2, text: "Microphone", icon: "mic.fill")
-                stepsOverviewRow(number: 3, text: "Input Monitoring", icon: "keyboard")
-                stepsOverviewRow(number: 4, text: "Accessibility", icon: "accessibility")
-                stepsOverviewRow(number: 5, text: "Download Model", icon: "arrow.down.circle.fill")
+                stepsOverviewRow(number: 3, text: "Accessibility", icon: "accessibility")
+                stepsOverviewRow(number: 4, text: "Launch at Login", icon: "power")
+                stepsOverviewRow(number: 5, text: "Input Monitoring", icon: "keyboard")
             }
         }
     }
@@ -197,20 +196,48 @@ struct OnboardingView: View {
 
             if step.permissionKey == "storage" {
                 // No button needed - just use bottom Next button
+            } else if step.permissionKey == "launchAtLogin" {
+                VStack(spacing: 12) {
+                    HStack(spacing: 4) {
+                        Image(systemName: launchAtLogin ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .foregroundColor(launchAtLogin ? .green : .red)
+                        Text(launchAtLogin ? "Enabled" : "Disabled")
+                            .font(.subheadline)
+                    }
+
+                    Button(launchAtLogin ? "Disable" : "Enable") {
+                        do {
+                            if launchAtLogin {
+                                try SMAppService.mainApp.unregister()
+                                launchAtLogin = false
+                            } else {
+                                try SMAppService.mainApp.register()
+                                launchAtLogin = true
+                            }
+                        } catch {
+                            // Failed to change state
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
             } else if step.permissionKey == "inputMonitoring" {
                 if status == .granted {
                     statusView(for: status)
                 } else {
                     VStack(spacing: 12) {
                         Button(action: {
+                            // Mark onboarding as completed before opening System Settings
+                            // since Input Monitoring will restart the app
+                            UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
                             UserDefaults.standard.set(true, forKey: "inputMonitoringRequested")
+                            appState.transcriptionEngine.selectedModel = "tiny"
                             appState.permissionManager.openSystemPreferences(for: "inputMonitoring")
                         }) {
                             Label("Open System Settings", systemImage: "gear")
                         }
                         .buttonStyle(.borderedProminent)
 
-                        Text("After adding VoiceScribe, System Settings will restart the app.")
+                        Text("After adding VoiceScribe, the app will restart automatically.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
@@ -225,82 +252,6 @@ struct OnboardingView: View {
                     }
                     .buttonStyle(.borderedProminent)
                 }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var modelDownloadContent: some View {
-        VStack(spacing: 16) {
-            stepIndicator
-
-            Image(systemName: downloadFailed ? "exclamationmark.triangle.fill" : "arrow.down.circle.fill")
-                .font(.system(size: 36))
-                .foregroundColor(downloadFailed ? .orange : .accentColor)
-                .frame(height: 50)
-
-            Text(downloadFailed ? "Documents Access Required" : "Download Model")
-                .font(.headline)
-
-            if downloadFailed {
-                Text("VoiceScribe needs Documents folder access to download models. Please enable it in System Settings, then tap Retry.")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                VStack(spacing: 12) {
-                    Button(action: {
-                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders") {
-                            NSWorkspace.shared.open(url)
-                        }
-                    }) {
-                        Label("Open System Settings", systemImage: "gear")
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button(action: {
-                        downloadFailed = false
-                        hasStartedTinyDownload = false
-                        startTinyDownloadIfNeeded()
-                    }) {
-                        Label("Retry Download", systemImage: "arrow.clockwise")
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-            } else {
-                Text("Downloading the Tiny model for quick start. You can download larger models for better accuracy in Settings.")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                // Tiny model status
-                VStack(spacing: 12) {
-                    if appState.transcriptionEngine.downloadingModel == "tiny" {
-                        ProgressView(value: appState.transcriptionEngine.downloadProgress)
-                            .frame(width: 200)
-                        Text("Downloading... \(Int(appState.transcriptionEngine.downloadProgress * 100))%")
-                            .font(.caption)
-                            .monospacedDigit()
-                            .foregroundColor(.secondary)
-                    } else if appState.transcriptionEngine.modelInfos.first(where: { $0.name == "tiny" })?.isDownloaded == true {
-                        HStack(spacing: 6) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
-                            Text("Ready to go!")
-                                .foregroundColor(.green)
-                                .fontWeight(.medium)
-                        }
-                        .font(.title3)
-                    } else {
-                        ProgressView()
-                        Text("Preparing download...")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .padding(.top, 8)
             }
         }
     }
@@ -358,7 +309,10 @@ struct OnboardingView: View {
 
             Spacer()
 
-            if currentStep < totalSteps - 1 {
+            // Don't show Next on Input Monitoring (last step) - user clicks "Open System Settings" instead
+            let isInputMonitoring = currentStep > 0 && permissionSteps[currentStep - 1].permissionKey == "inputMonitoring"
+
+            if !isInputMonitoring {
                 Button(currentStep == 0 ? "Get Started" : "Next") {
                     withAnimation {
                         currentStep += 1
@@ -366,38 +320,8 @@ struct OnboardingView: View {
                     appState.permissionManager.checkAllPermissions()
                 }
                 .buttonStyle(.borderedProminent)
-            } else {
-                // Final step
-                Button("Quit and Restart") {
-                    Task {
-                        await finishOnboarding()
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!canFinish)
             }
         }
-    }
-
-    private var canFinish: Bool {
-        appState.transcriptionEngine.isModelDownloaded("tiny")
-    }
-
-    private func finishOnboarding() async {
-        let engine = appState.transcriptionEngine
-
-        // Wait for tiny to finish if still downloading
-        while engine.downloadingModel == "tiny" {
-            try? await Task.sleep(nanoseconds: 100_000_000)
-        }
-
-        // Set tiny as the selected model
-        engine.selectedModel = "tiny"
-
-        // Mark onboarding as completed
-        UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
-
-        relaunchApp()
     }
 
     private func relaunchApp() {

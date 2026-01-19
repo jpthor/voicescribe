@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import ServiceManagement
 
 struct SettingsView: View {
     @ObservedObject var appState: AppState
@@ -7,6 +8,7 @@ struct SettingsView: View {
     @Environment(\.dismissWindow) private var dismissWindow
     @State private var showDeleteConfirmation = false
     @State private var modelToDelete: String?
+    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     init(appState: AppState) {
         self.appState = appState
@@ -51,14 +53,17 @@ struct SettingsView: View {
             // Permissions section
             permissionsSection
 
-            Spacer()
+            Divider()
 
             // Fn key usage
             fnKeySection
+
+            Spacer()
         }
         .padding()
+        .padding(.top, 10)
         .padding(.bottom, 10)
-        .frame(width: 450, height: 610)
+        .frame(width: 450, height: 680)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             appState.permissionManager.checkAllPermissions()
         }
@@ -121,7 +126,7 @@ struct SettingsView: View {
                     }
                 }
             }
-            .frame(height: 220)
+            .frame(height: 260)
 
             if transcriptionEngine.isLoading {
                 HStack {
@@ -137,16 +142,8 @@ struct SettingsView: View {
     @ViewBuilder
     private var permissionsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Permissions")
-                    .font(.headline)
-                Spacer()
-                Button("Check Permissions") {
-                    appState.permissionManager.checkAllPermissions()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
+            Text("Permissions")
+                .font(.headline)
 
             PermissionRowView(
                 title: "Microphone",
@@ -172,10 +169,11 @@ struct SettingsView: View {
                 action: { appState.permissionManager.openSystemPreferences(for: "filesAndFolders") }
             )
 
-            Text("If any permission isn't working: remove it in System Settings, re-add it, then restart the app.")
+            LaunchAtLoginRowView(isEnabled: $launchAtLogin)
+
+            Text("If any permission isn't working: remove it in System Settings, re-add, then restart.")
                 .font(.caption)
                 .foregroundColor(.secondary)
-                .padding(.top, 4)
         }
     }
 
@@ -309,6 +307,38 @@ struct PermissionRowView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
             }
+        }
+    }
+}
+
+struct LaunchAtLoginRowView: View {
+    @Binding var isEnabled: Bool
+
+    var body: some View {
+        HStack {
+            Text("Launch at Login")
+            Spacer()
+            HStack(spacing: 4) {
+                Image(systemName: isEnabled ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    .foregroundColor(isEnabled ? .green : .red)
+                Text(isEnabled ? "Enabled" : "Disabled")
+                    .font(.caption)
+            }
+            Button(isEnabled ? "Disable" : "Enable") {
+                do {
+                    if isEnabled {
+                        try SMAppService.mainApp.unregister()
+                        isEnabled = false
+                    } else {
+                        try SMAppService.mainApp.register()
+                        isEnabled = true
+                    }
+                } catch {
+                    // Failed to change state
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
         }
     }
 }
