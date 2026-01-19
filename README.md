@@ -65,15 +65,24 @@ Models are downloaded on-demand and cached locally. You can download multiple mo
 
 ## Permissions
 
-VoiceScribe requires three system permissions:
+VoiceScribe requires the following system permissions:
 
-| Permission | Purpose |
-|------------|---------|
-| **Microphone** | Record audio for transcription |
-| **Input Monitoring** | Detect Fn key press/release |
-| **Accessibility** | Insert transcribed text into apps |
+| Permission | Purpose | Required |
+|------------|---------|----------|
+| **Files & Folders** | Store downloaded Whisper models in Documents | Yes |
+| **Microphone** | Capture audio for transcription | Yes |
+| **Accessibility** | Insert transcribed text into apps | Yes |
+| **Input Monitoring** | Detect Fn key press/release | Yes |
+
+Optional:
+
+| Setting | Purpose |
+|---------|---------|
+| **Launch at Login** | Start VoiceScribe automatically when you log in |
 
 On first launch, an onboarding screen will guide you through granting these permissions. You can also manage them in Settings or System Settings > Privacy & Security.
+
+**Note**: Granting Input Monitoring permission will restart the app automatically.
 
 ## Technology
 
