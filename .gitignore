@@ -1,0 +1,23 @@
+# Build
+.build/
+*.app
+*.zip
+DerivedData/
+
+# Xcode
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# Swift Package Manager
+.swiftpm/
+Package.resolved
+certs/
+*.p12
+*.key
+*.cer
