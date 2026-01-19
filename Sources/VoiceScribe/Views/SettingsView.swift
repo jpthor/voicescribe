@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var showDeleteConfirmation = false
     @State private var modelToDelete: String?
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var showResetConfirmation = false
 
     init(appState: AppState) {
         self.appState = appState
@@ -78,6 +79,14 @@ struct SettingsView: View {
             if let model = modelToDelete {
                 Text("This will delete the \(model) model and free up disk space.")
             }
+        }
+        .alert("Reset & Restart Onboarding?", isPresented: $showResetConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Reset & Quit", role: .destructive) {
+                resetAndRestartOnboarding()
+            }
+        } message: {
+            Text("This will reset app settings and quit. You'll need to re-grant permissions in System Settings before relaunching.")
         }
     }
 
@@ -171,10 +180,36 @@ struct SettingsView: View {
 
             LaunchAtLoginRowView(isEnabled: $launchAtLogin)
 
-            Text("If any permission isn't working: remove it in System Settings, re-add, then restart.")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            HStack {
+                Text("If any permission isn't working: remove it in System Settings, re-add, then restart.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button("Reset All") {
+                    showResetConfirmation = true
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
         }
+    }
+
+    private func resetAndRestartOnboarding() {
+        let bundleId = Bundle.main.bundleIdentifier ?? "com.voicescribe.app"
+
+        UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
+        UserDefaults.standard.removeObject(forKey: "inputMonitoringRequested")
+
+        let permissions = ["Microphone", "Accessibility", "ListenEvent", "SystemPolicyDocumentsFolder"]
+        for permission in permissions {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+            process.arguments = ["reset", permission, bundleId]
+            try? process.run()
+            process.waitUntilExit()
+        }
+
+        NSApplication.shared.terminate(nil)
     }
 
     @ViewBuilder
