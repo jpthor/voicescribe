@@ -181,9 +181,6 @@ struct SettingsView: View {
             LaunchAtLoginRowView(isEnabled: $launchAtLogin)
 
             HStack {
-                Text("If any permission isn't working: remove it in System Settings, re-add, then restart.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
                 Spacer()
                 Button("Reset All") {
                     showResetConfirmation = true
@@ -199,6 +196,7 @@ struct SettingsView: View {
 
         UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
         UserDefaults.standard.removeObject(forKey: "inputMonitoringRequested")
+        UserDefaults.standard.removeObject(forKey: "accessibilityRequested")
 
         let permissions = ["Microphone", "Accessibility", "ListenEvent", "SystemPolicyDocumentsFolder"]
         for permission in permissions {

@@ -246,7 +246,7 @@ struct OnboardingView: View {
             } else {
                 statusView(for: status)
 
-                if status != .granted && status != .requested {
+                if status != .granted {
                     Button(action: { grantPermission(for: step.permissionKey) }) {
                         Label("Grant Permission", systemImage: "lock.open")
                     }
