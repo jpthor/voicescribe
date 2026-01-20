@@ -1,5 +1,6 @@
 import SwiftUI
 import ServiceManagement
+import VoiceScribeCore
 
 struct OnboardingView: View {
     @ObservedObject var appState: AppState

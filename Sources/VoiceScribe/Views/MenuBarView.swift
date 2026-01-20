@@ -1,9 +1,10 @@
 import SwiftUI
+import AppKit
 
 struct MenuBarView: View {
     @ObservedObject var appState: AppState
     @Environment(\.openWindow) private var openWindow
-    @Environment(\.dismissWindow) private var dismissWindow
+    @State private var showCopiedFeedback = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -17,7 +18,7 @@ struct MenuBarView: View {
         }
         .padding()
         .frame(width: 300)
-        .onChange(of: appState.showOnboarding) { _, showOnboarding in
+        .onChange(of: appState.showOnboarding) { showOnboarding in
             if showOnboarding {
                 openWindow(id: "onboarding")
             }
@@ -126,9 +127,21 @@ struct MenuBarView: View {
     @ViewBuilder
     private var lastTranscriptionSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Last Transcription")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            HStack {
+                Text("Last Transcription")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                if !appState.lastTranscription.isEmpty {
+                    Button(action: copyTranscription) {
+                        Image(systemName: showCopiedFeedback ? "checkmark" : "doc.on.doc")
+                            .font(.caption)
+                            .foregroundColor(showCopiedFeedback ? .green : .secondary)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Copy to clipboard")
+                }
+            }
 
             if appState.lastTranscription.isEmpty {
                 Text("No transcriptions yet")
@@ -139,6 +152,20 @@ struct MenuBarView: View {
                 Text(appState.lastTranscription)
                     .font(.body)
                     .lineLimit(3)
+            }
+        }
+    }
+
+    private func copyTranscription() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(appState.lastTranscription, forType: .string)
+
+        withAnimation {
+            showCopiedFeedback = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            withAnimation {
+                showCopiedFeedback = false
             }
         }
     }

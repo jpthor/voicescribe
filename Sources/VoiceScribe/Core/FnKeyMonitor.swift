@@ -1,16 +1,20 @@
 import Foundation
 import IOKit
 import IOKit.hid
+import VoiceScribeCore
 
 final class FnKeyMonitor {
     private var hidManager: IOHIDManager?
-    private var onFnKeyStateChanged: ((Bool) -> Void)?
+    private let stateMachine: FnKeyStateMachine
 
     private static let fnUsagePage: UInt32 = 0xFF
     private static let fnUsage: UInt32 = 0x03
 
     init(onFnKeyStateChanged: @escaping (Bool) -> Void) {
-        self.onFnKeyStateChanged = onFnKeyStateChanged
+        self.stateMachine = FnKeyStateMachine(
+            scheduler: DispatchQueueScheduler(),
+            onStateChanged: onFnKeyStateChanged
+        )
     }
 
     func start() -> Bool {
@@ -54,11 +58,20 @@ final class FnKeyMonitor {
         let element = IOHIDValueGetElement(value)
         let usagePage = IOHIDElementGetUsagePage(element)
         let usage = IOHIDElementGetUsage(element)
+        let intValue = IOHIDValueGetIntegerValue(value)
 
         if usagePage == Self.fnUsagePage && usage == Self.fnUsage {
-            let pressed = IOHIDValueGetIntegerValue(value) == 1
+            let pressed = intValue == 1
             DispatchQueue.main.async { [weak self] in
-                self?.onFnKeyStateChanged?(pressed)
+                if pressed {
+                    self?.stateMachine.fnKeyPressed()
+                } else {
+                    self?.stateMachine.fnKeyReleased()
+                }
+            }
+        } else if stateMachine.isFnHeld && usagePage == kHIDPage_KeyboardOrKeypad && intValue == 1 {
+            DispatchQueue.main.async { [weak self] in
+                self?.stateMachine.otherKeyPressed()
             }
         }
     }

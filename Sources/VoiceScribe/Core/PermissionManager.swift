@@ -2,19 +2,13 @@ import AVFAudio
 import AVFoundation
 import AppKit
 import IOKit.hid
+import VoiceScribeCore
 
 func log(_ message: String) {
     let timestamp = ISO8601DateFormatter().string(from: Date())
     let msg = "[\(timestamp)] \(message)"
     print(msg)
     NSLog("%@", msg)
-}
-
-enum PermissionStatus {
-    case granted
-    case denied
-    case notDetermined
-    case requested
 }
 
 @MainActor
@@ -49,31 +43,58 @@ final class PermissionManager: ObservableObject {
 
     func checkMicrophonePermission() {
         log("checkMicrophonePermission called")
-        // Use AVAudioApplication for macOS 14+
-        let recordPermission = AVAudioApplication.shared.recordPermission
-        log("Microphone recordPermission: \(recordPermission.rawValue)")
-        switch recordPermission {
-        case .granted:
-            microphoneStatus = .granted
-            log("Microphone: granted")
-        case .denied:
-            microphoneStatus = .denied
-            log("Microphone: denied")
-        case .undetermined:
-            microphoneStatus = .notDetermined
-            log("Microphone: notDetermined")
-        @unknown default:
-            microphoneStatus = .notDetermined
-            log("Microphone: unknown")
+        if #available(macOS 14.0, *) {
+            let recordPermission = AVAudioApplication.shared.recordPermission
+            log("Microphone recordPermission: \(recordPermission.rawValue)")
+            switch recordPermission {
+            case .granted:
+                microphoneStatus = .granted
+                log("Microphone: granted")
+            case .denied:
+                microphoneStatus = .denied
+                log("Microphone: denied")
+            case .undetermined:
+                microphoneStatus = .notDetermined
+                log("Microphone: notDetermined")
+            @unknown default:
+                microphoneStatus = .notDetermined
+                log("Microphone: unknown")
+            }
+        } else {
+            let authStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+            log("Microphone authStatus: \(authStatus.rawValue)")
+            switch authStatus {
+            case .authorized:
+                microphoneStatus = .granted
+                log("Microphone: granted")
+            case .denied, .restricted:
+                microphoneStatus = .denied
+                log("Microphone: denied")
+            case .notDetermined:
+                microphoneStatus = .notDetermined
+                log("Microphone: notDetermined")
+            @unknown default:
+                microphoneStatus = .notDetermined
+                log("Microphone: unknown")
+            }
         }
     }
 
     func requestMicrophonePermission() {
         log("requestMicrophonePermission called")
-        AVAudioApplication.requestRecordPermission { granted in
-            log("Microphone request result: \(granted ? "granted" : "denied")")
-            Task { @MainActor in
-                self.microphoneStatus = granted ? .granted : .denied
+        if #available(macOS 14.0, *) {
+            AVAudioApplication.requestRecordPermission { granted in
+                log("Microphone request result: \(granted ? "granted" : "denied")")
+                Task { @MainActor in
+                    self.microphoneStatus = granted ? .granted : .denied
+                }
+            }
+        } else {
+            AVCaptureDevice.requestAccess(for: .audio) { granted in
+                log("Microphone request result: \(granted ? "granted" : "denied")")
+                Task { @MainActor in
+                    self.microphoneStatus = granted ? .granted : .denied
+                }
             }
         }
     }
@@ -95,9 +116,16 @@ final class PermissionManager: ObservableObject {
     func requestInputMonitoringPermission() {
         log("requestInputMonitoringPermission called")
         UserDefaults.standard.set(true, forKey: "inputMonitoringRequested")
-        inputMonitoringStatus = .requested
 
-        openSystemPreferences(for: "inputMonitoring")
+        let result = IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
+        log("IOHIDRequestAccess result: \(result)")
+
+        if result {
+            inputMonitoringStatus = .granted
+        } else {
+            inputMonitoringStatus = .requested
+            openSystemPreferences(for: "inputMonitoring")
+        }
     }
 
     func checkAccessibilityPermission() {

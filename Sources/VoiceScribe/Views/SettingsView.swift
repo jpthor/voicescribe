@@ -1,11 +1,11 @@
 import SwiftUI
 import AppKit
 import ServiceManagement
+import VoiceScribeCore
 
 struct SettingsView: View {
     @ObservedObject var appState: AppState
     @ObservedObject var transcriptionEngine: TranscriptionEngine
-    @Environment(\.dismissWindow) private var dismissWindow
     @State private var showDeleteConfirmation = false
     @State private var modelToDelete: String?
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -37,7 +37,7 @@ struct SettingsView: View {
                 }
                 Spacer()
                 Button("Done") {
-                    dismissWindow(id: "settings")
+                    NSApp.keyWindow?.close()
                 }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.escape, modifiers: [])

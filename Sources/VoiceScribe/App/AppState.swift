@@ -1,18 +1,7 @@
 import AppKit
 import Combine
 import Foundation
-
-enum RecordingState: Equatable {
-    case idle
-    case recording
-    case processing
-    case error(String)
-
-    var isIdle: Bool {
-        if case .idle = self { return true }
-        return false
-    }
-}
+import VoiceScribeCore
 
 @MainActor
 final class AppState: ObservableObject {
