@@ -206,11 +206,11 @@ final class TranscriptionEngine: ObservableObject {
 
     private func modelDescription(_ model: String) -> String {
         switch model {
-        case "tiny": return "Fastest • ~0.3s per 10s audio"
-        case "base": return "Balanced • ~0.7s per 10s audio"
-        case "small": return "Accurate • ~1.5s per 10s audio"
-        case "medium": return "Very accurate • ~3s per 10s audio"
-        case "large-v3": return "Best accuracy • ~6s per 10s audio"
+        case "tiny": return "Fastest • ~0.1s per 10s audio"
+        case "base": return "Balanced • ~0.1s per 10s audio"
+        case "small": return "Accurate • ~0.2s per 10s audio"
+        case "medium": return "Very accurate • ~0.6s per 10s audio"
+        case "large-v3": return "Best accuracy • ~1.1s per 10s audio"
         default: return ""
         }
     }

@@ -53,13 +53,15 @@ Hold Fn → Speak → Release Fn → Text appears
 
 ## Whisper Models
 
-| Model | Size | Description |
-|-------|------|-------------|
-| Tiny | ~75 MB | Fastest, basic accuracy |
-| Base | ~145 MB | Good balance (recommended) |
-| Small | ~480 MB | Better accuracy |
-| Medium | ~1.5 GB | High accuracy |
-| Large v3 | ~3 GB | Best accuracy |
+| Model | Size | Speed (10s audio) | Description |
+|-------|------|-------------------|-------------|
+| Tiny | ~75 MB | ~0.1s | Fastest, basic accuracy |
+| Base | ~145 MB | ~0.1s | Good balance (recommended) |
+| Small | ~480 MB | ~0.2s | Better accuracy |
+| Medium | ~1.5 GB | ~0.6s | High accuracy |
+| Large v3 | ~3 GB | ~1.1s | Best accuracy |
+
+*Speeds measured on Apple Silicon. All models transcribe faster than real-time.*
 
 Models are downloaded on-demand and cached locally. You can download multiple models and switch between them in Settings.
 
