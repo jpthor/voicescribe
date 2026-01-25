@@ -69,9 +69,10 @@ final class FnKeyMonitor {
                     self?.stateMachine.fnKeyReleased()
                 }
             }
-        } else if stateMachine.isFnHeld && usagePage == kHIDPage_KeyboardOrKeypad && intValue == 1 {
+        } else if usagePage == kHIDPage_KeyboardOrKeypad && intValue == 1 {
             DispatchQueue.main.async { [weak self] in
-                self?.stateMachine.otherKeyPressed()
+                guard let self = self, self.stateMachine.isFnHeld else { return }
+                self.stateMachine.otherKeyPressed()
             }
         }
     }
