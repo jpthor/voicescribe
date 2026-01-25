@@ -5,16 +5,14 @@ import VoiceScribeCore
 
 final class FnKeyMonitor {
     private var hidManager: IOHIDManager?
-    private let stateMachine: FnKeyStateMachine
-
-    private static let fnUsagePage: UInt32 = 0xFF
-    private static let fnUsage: UInt32 = 0x03
+    private let inputHandler: HIDInputHandler
 
     init(onFnKeyStateChanged: @escaping (Bool) -> Void) {
-        self.stateMachine = FnKeyStateMachine(
+        let stateMachine = FnKeyStateMachine(
             scheduler: DispatchQueueScheduler(),
             onStateChanged: onFnKeyStateChanged
         )
+        self.inputHandler = HIDInputHandler(stateMachine: stateMachine)
     }
 
     func start() -> Bool {
@@ -60,21 +58,12 @@ final class FnKeyMonitor {
         let usage = IOHIDElementGetUsage(element)
         let intValue = IOHIDValueGetIntegerValue(value)
 
-        if usagePage == Self.fnUsagePage && usage == Self.fnUsage {
-            let pressed = intValue == 1
-            DispatchQueue.main.async { [weak self] in
-                if pressed {
-                    self?.stateMachine.fnKeyPressed()
-                } else {
-                    self?.stateMachine.fnKeyReleased()
-                }
-            }
-        } else if usagePage == kHIDPage_KeyboardOrKeypad && intValue == 1 {
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self, self.stateMachine.isFnHeld else { return }
-                self.stateMachine.otherKeyPressed()
-            }
-        }
+        let event = HIDKeyEvent(
+            usagePage: usagePage,
+            usage: usage,
+            value: Int(intValue)
+        )
+        inputHandler.handleKeyEvent(event)
     }
 
     deinit {
