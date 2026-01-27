@@ -148,24 +148,66 @@ jobs:
         run: |
           xcrun stapler staple "${{ env.APP_NAME }}.app"
 
-      - name: Create Final Release Archive
+      - name: Create DMG
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          ZIP_NAME="${{ env.APP_NAME }}-${VERSION}-universal.zip"
+          DMG_NAME="${{ env.APP_NAME }}-${VERSION}-universal.dmg"
 
-          # Remove old zip and create new one with stapled app
-          rm -f "$ZIP_NAME"
-          ditto -c -k --keepParent "${{ env.APP_NAME }}.app" "$ZIP_NAME"
+          # Create temp directory with app and Applications symlink
+          mkdir -p dmg_temp
+          cp -r "${{ env.APP_NAME }}.app" dmg_temp/
+          ln -s /Applications dmg_temp/Applications
 
-          echo "Created: $ZIP_NAME"
-          shasum -a 256 "$ZIP_NAME" | tee sha256.txt
+          # Create DMG
+          hdiutil create -volname "${{ env.APP_NAME }} ${VERSION}" \
+            -srcfolder dmg_temp \
+            -ov -format UDZO \
+            "$DMG_NAME"
+
+          rm -rf dmg_temp
+
+          echo "Created: $DMG_NAME"
+
+      - name: Sign DMG
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          DMG_NAME="${{ env.APP_NAME }}-${VERSION}-universal.dmg"
+
+          codesign --force \
+            --sign "Developer ID Application: John-Paul Thorbjornsen ($APPLE_TEAM_ID)" \
+            "$DMG_NAME"
+
+      - name: Notarize DMG
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          DMG_NAME="${{ env.APP_NAME }}-${VERSION}-universal.dmg"
+
+          xcrun notarytool submit "$DMG_NAME" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_ID_PASSWORD" \
+            --wait
+
+          xcrun stapler staple "$DMG_NAME"
+
+      - name: Generate checksums
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          DMG_NAME="${{ env.APP_NAME }}-${VERSION}-universal.dmg"
+          shasum -a 256 "$DMG_NAME" | tee sha256.txt
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.APP_NAME }}-universal
           path: |
-            ${{ env.APP_NAME }}-*.zip
+            ${{ env.APP_NAME }}-*.dmg
             sha256.txt
 
   release:
@@ -201,18 +243,24 @@ jobs:
           prerelease: false
           generate_release_notes: true
           files: |
-            ${{ env.APP_NAME }}-*.zip
+            ${{ env.APP_NAME }}-*.dmg
             sha256.txt
           body: |
             ## VoiceScribe v${{ steps.version.outputs.version }}
 
             ### Installation
-            1. Download `VoiceScribe-${{ steps.version.outputs.version }}-universal.zip`
-            2. Unzip and drag `VoiceScribe.app` to your Applications folder
-            3. Launch the app
+            1. Download `VoiceScribe-${{ steps.version.outputs.version }}-universal.dmg`
+            2. Open the DMG file
+            3. Drag `VoiceScribe.app` to your Applications folder
+            4. Launch VoiceScribe and follow the setup wizard
 
             ### System Requirements
-            - macOS 14.0 (Sonoma) or later
-            - Apple Silicon (M1/M2/M3) or Intel processor
+            - macOS 13.0 (Ventura) or later
+            - Apple Silicon (M1/M2/M3/M4) or Intel processor
+
+            ### Features
+            - Hold **Fn key** to record, release to transcribe
+            - 100% on-device processing - no data leaves your Mac
+            - Works with any app - text is typed wherever your cursor is
 
             This release is signed and notarized by Apple.
