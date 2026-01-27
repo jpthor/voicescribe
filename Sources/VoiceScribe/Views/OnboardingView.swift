@@ -5,6 +5,7 @@ import VoiceScribeCore
 struct OnboardingView: View {
     @ObservedObject var appState: AppState
     @ObservedObject var transcriptionEngine: TranscriptionEngine
+    @ObservedObject var permissionManager: PermissionManager
     @Environment(\.dismiss) private var dismiss
     @State private var currentStep = 0
     @State private var hasStartedTinyDownload = false
@@ -13,6 +14,7 @@ struct OnboardingView: View {
     init(appState: AppState) {
         self.appState = appState
         self.transcriptionEngine = appState.transcriptionEngine
+        self.permissionManager = appState.permissionManager
     }
 
     private let permissionSteps = [
@@ -69,7 +71,7 @@ struct OnboardingView: View {
         .padding(24)
         .frame(width: 450, height: 580)
         .onAppear {
-            appState.permissionManager.checkAllPermissions()
+            permissionManager.checkAllPermissions()
             startTinyDownloadIfNeeded()
         }
     }
@@ -232,7 +234,7 @@ struct OnboardingView: View {
                             UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
                             UserDefaults.standard.set(true, forKey: "inputMonitoringRequested")
                             appState.transcriptionEngine.selectedModel = "tiny"
-                            appState.permissionManager.openSystemPreferences(for: "inputMonitoring")
+                            permissionManager.openSystemPreferences(for: "inputMonitoring")
                         }) {
                             Label("Open System Settings", systemImage: "gear")
                         }
@@ -318,7 +320,7 @@ struct OnboardingView: View {
                     withAnimation {
                         currentStep += 1
                     }
-                    appState.permissionManager.checkAllPermissions()
+                    permissionManager.checkAllPermissions()
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -338,11 +340,11 @@ struct OnboardingView: View {
     private func permissionStatus(for key: String) -> PermissionStatus {
         switch key {
         case "microphone":
-            return appState.permissionManager.microphoneStatus
+            return permissionManager.microphoneStatus
         case "inputMonitoring":
-            return appState.permissionManager.inputMonitoringStatus
+            return permissionManager.inputMonitoringStatus
         case "accessibility":
-            return appState.permissionManager.accessibilityStatus
+            return permissionManager.accessibilityStatus
         default:
             return .notDetermined
         }
@@ -351,12 +353,12 @@ struct OnboardingView: View {
     private func grantPermission(for key: String) {
         switch key {
         case "microphone":
-            appState.permissionManager.requestMicrophonePermission()
+            permissionManager.requestMicrophonePermission()
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                appState.permissionManager.checkAllPermissions()
+                permissionManager.checkAllPermissions()
             }
         case "accessibility":
-            appState.permissionManager.requestAccessibilityPermission()
+            permissionManager.requestAccessibilityPermission()
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 withAnimation {
                     currentStep += 1

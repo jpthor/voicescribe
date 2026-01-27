@@ -43,25 +43,27 @@ public final class FnKeyStateMachine {
 
         _fnIsHeld = true
         _otherKeyPressedWhileFnHeld = false
-        lock.unlock()
 
-        pendingActivation = scheduler.scheduleAfter(activationDelay) { [weak self] in
+        let token = scheduler.scheduleAfter(activationDelay) { [weak self] in
             self?.activateIfValid()
         }
+        pendingActivation = token
+        lock.unlock()
     }
 
     public func fnKeyReleased() {
-        if let token = pendingActivation {
-            scheduler.cancel(token)
-            pendingActivation = nil
-        }
-
         lock.lock()
+        let token = pendingActivation
+        pendingActivation = nil
         let wasRecording = _recordingStarted
         _fnIsHeld = false
         _otherKeyPressedWhileFnHeld = false
         _recordingStarted = false
         lock.unlock()
+
+        if let token = token {
+            scheduler.cancel(token)
+        }
 
         if wasRecording {
             onStateChanged?(false)
@@ -75,18 +77,18 @@ public final class FnKeyStateMachine {
             return
         }
         _otherKeyPressedWhileFnHeld = true
+        let token = pendingActivation
+        pendingActivation = nil
         lock.unlock()
 
-        if let token = pendingActivation {
+        if let token = token {
             scheduler.cancel(token)
-            pendingActivation = nil
         }
     }
 
     private func activateIfValid() {
-        pendingActivation = nil
-
         lock.lock()
+        pendingActivation = nil
         let shouldActivate = _fnIsHeld && !_otherKeyPressedWhileFnHeld
         if shouldActivate {
             _recordingStarted = true

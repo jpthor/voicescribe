@@ -10,7 +10,8 @@ let package = Package(
         .executable(name: "VoiceScribe", targets: ["VoiceScribe"])
     ],
     dependencies: [
-        .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.8.0")
+        .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.8.0"),
+        .package(url: "https://github.com/exPHAT/SwiftWhisper.git", branch: "master")
     ],
     targets: [
         .target(
@@ -19,7 +20,11 @@ let package = Package(
         ),
         .executableTarget(
             name: "VoiceScribe",
-            dependencies: ["WhisperKit", "VoiceScribeCore"],
+            dependencies: [
+                "WhisperKit",
+                "SwiftWhisper",
+                "VoiceScribeCore"
+            ],
             path: "Sources/VoiceScribe",
             resources: [
                 .copy("../../Resources")
