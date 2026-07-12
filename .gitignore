@@ -3,6 +3,7 @@
 *.app
 *.zip
 DerivedData/
+dist/
 
 # Xcode
 *.xcodeproj
@@ -16,7 +17,6 @@ xcuserdata/
 
 # Swift Package Manager
 .swiftpm/
-Package.resolved
 certs/
 *.p12
 *.key

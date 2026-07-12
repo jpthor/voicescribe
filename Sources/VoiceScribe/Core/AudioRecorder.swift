@@ -10,6 +10,11 @@ final class AudioRecorder {
 
     var audioLevel: Float = 0
 
+    func prepare() {
+        _ = audioEngine.inputNode
+        audioEngine.prepare()
+    }
+
     func startRecording() throws {
         bufferLock.lock()
         audioBuffer.removeAll()
@@ -61,6 +66,7 @@ final class AudioRecorder {
             }
         }
 
+        audioEngine.prepare()
         try audioEngine.start()
     }
 

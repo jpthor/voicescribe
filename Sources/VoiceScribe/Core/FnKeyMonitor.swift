@@ -5,14 +5,23 @@ import VoiceScribeCore
 
 final class FnKeyMonitor {
     private var hidManager: IOHIDManager?
-    private let inputHandler: HIDInputHandler
+    private let inputHandler: HIDInputHandler?
+    private let triggerMode: TriggerMode
+    private let onFnKeyStateChanged: (Bool) -> Void
+    private var fnIsDown = false
 
-    init(onFnKeyStateChanged: @escaping (Bool) -> Void) {
-        let stateMachine = FnKeyStateMachine(
-            scheduler: DispatchQueueScheduler(),
-            onStateChanged: onFnKeyStateChanged
-        )
-        self.inputHandler = HIDInputHandler(stateMachine: stateMachine)
+    init(triggerMode: TriggerMode, onFnKeyStateChanged: @escaping (Bool) -> Void) {
+        self.triggerMode = triggerMode
+        self.onFnKeyStateChanged = onFnKeyStateChanged
+        if triggerMode == .hold {
+            let stateMachine = FnKeyStateMachine(
+                scheduler: DispatchQueueScheduler(),
+                onStateChanged: onFnKeyStateChanged
+            )
+            self.inputHandler = HIDInputHandler(stateMachine: stateMachine)
+        } else {
+            self.inputHandler = nil
+        }
     }
 
     func start() -> Bool {
@@ -63,7 +72,22 @@ final class FnKeyMonitor {
             usage: usage,
             value: Int(intValue)
         )
-        inputHandler.handleKeyEvent(event)
+        if triggerMode == .hold {
+            inputHandler?.handleKeyEvent(event)
+            return
+        }
+
+        guard usagePage == HIDInputHandler.fnUsagePage,
+              usage == HIDInputHandler.fnUsage else { return }
+
+        let pressed = intValue != 0
+        if pressed && !fnIsDown {
+            fnIsDown = true
+            onFnKeyStateChanged(true)
+        } else if !pressed && fnIsDown {
+            fnIsDown = false
+            onFnKeyStateChanged(false)
+        }
     }
 
     deinit {

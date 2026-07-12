@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import VoiceScribeCore
 
 struct MenuBarView: View {
     @ObservedObject var appState: AppState
@@ -18,7 +19,7 @@ struct MenuBarView: View {
         }
         .padding()
         .frame(width: 300)
-        .onChange(of: appState.showOnboarding) { showOnboarding in
+        .onChange(of: appState.showOnboarding) { _, showOnboarding in
             if showOnboarding {
                 openWindow(id: "onboarding")
             }
@@ -114,9 +115,11 @@ struct MenuBarView: View {
         }
         switch appState.state {
         case .idle:
-            return "Hold \(appState.triggerKey.displayName) to record"
+            return appState.triggerInstruction
         case .recording:
-            return "Release \(appState.triggerKey.displayName) to stop"
+            return appState.triggerMode == .hold
+                ? "Release \(appState.triggerDisplayName) to transcribe; Escape cancels"
+                : "Press \(appState.triggerDisplayName) again to transcribe; Escape cancels"
         case .processing:
             return "Transcribing audio..."
         case .error(let message):
@@ -190,10 +193,7 @@ struct MenuBarView: View {
                     get: { appState.transcriptionEngine.selectedModel },
                     set: { newModel in
                         Task {
-                            try? await appState.transcriptionEngine.changeModel(to: newModel)
-                            if appState.transcriptionEngine.isModelLoaded {
-                                appState.state = .idle
-                            }
+                            await appState.changeModel(to: newModel)
                         }
                     }
                 )) {
@@ -214,14 +214,7 @@ struct MenuBarView: View {
     }
 
     private func modelDisplayName(_ model: String) -> String {
-        switch model {
-        case "tiny": return "Tiny"
-        case "base": return "Base"
-        case "small": return "Small"
-        case "medium": return "Medium"
-        case "large-v3": return "Large v3"
-        default: return model.capitalized
-        }
+        ModelMetadata.displayName(for: model)
     }
 
     @ViewBuilder

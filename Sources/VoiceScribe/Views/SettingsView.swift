@@ -17,54 +17,23 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        VStack(spacing: 16) {
-            // App branding header
-            HStack(spacing: 12) {
-                if let appIcon = NSApp.applicationIconImage {
-                    Image(nsImage: appIcon)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 48, height: 48)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        VStack(spacing: 12) {
+            settingsHeader
+            Divider()
+            ScrollView {
+                VStack(spacing: 16) {
+                    modelSection
+                    Divider()
+                    permissionsSection
+                    Divider()
+                    triggerSection
                 }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("VoiceScribe")
-                        .font(.title)
-                        .fontWeight(.bold)
-                    Text("Local speech recognition powered by WhisperKit. All processing on-device.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                Spacer()
-                Button("Done") {
-                    NSApp.keyWindow?.close()
-                }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.escape, modifiers: [])
+                .padding(.trailing, 8)
+                .padding(.bottom, 12)
             }
-            .padding(.bottom, 4)
-
-            Divider()
-
-            // Models section
-            modelSection
-
-            Divider()
-
-            // Permissions section
-            permissionsSection
-
-            Divider()
-
-            // Fn key usage
-            fnKeySection
-
-            Spacer()
         }
         .padding()
-        .padding(.top, 10)
-        .padding(.bottom, 10)
-        .frame(width: 450, height: 680)
+        .frame(minWidth: 500, idealWidth: 520, minHeight: 500, idealHeight: 640)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             appState.permissionManager.checkAllPermissions()
         }
@@ -90,11 +59,34 @@ struct SettingsView: View {
         }
     }
 
+    private var settingsHeader: some View {
+        HStack(spacing: 12) {
+            if let appIcon = NSApp.applicationIconImage {
+                Image(nsImage: appIcon)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 48, height: 48)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("VoiceScribe").font(.title).fontWeight(.bold)
+                Text("Local English speech recognition powered by Parakeet Unified. All processing on-device.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Button("Done") { NSApp.keyWindow?.close() }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.escape, modifiers: [])
+        }
+    }
+
     @ViewBuilder
     private var modelSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Whisper Models")
+                Text("Speech Models")
                     .font(.headline)
                 Spacer()
                 if transcriptionEngine.isDownloading {
@@ -108,10 +100,9 @@ struct SettingsView: View {
                 }
             }
 
-            ScrollView {
-                VStack(spacing: 6) {
-                    ForEach(transcriptionEngine.modelInfos, id: \.name) { info in
-                        ModelRowView(
+            VStack(spacing: 6) {
+                ForEach(transcriptionEngine.modelInfos, id: \.name) { info in
+                    ModelRowView(
                             info: info,
                             isSelected: transcriptionEngine.selectedModel == info.name,
                             isDownloading: transcriptionEngine.downloadingModel == info.name,
@@ -119,23 +110,21 @@ struct SettingsView: View {
                             downloadProgress: transcriptionEngine.downloadProgress,
                             onSelect: {
                                 Task {
-                                    try? await transcriptionEngine.changeModel(to: info.name)
+                                    await appState.changeModel(to: info.name)
                                 }
                             },
                             onDownload: {
                                 Task {
-                                    try? await transcriptionEngine.downloadModel(info.name)
+                                    await appState.downloadModel(info.name)
                                 }
                             },
                             onDelete: {
                                 modelToDelete = info.name
                                 showDeleteConfirmation = true
                             }
-                        )
-                    }
+                    )
                 }
             }
-            .frame(height: 260)
 
             if transcriptionEngine.isLoading {
                 HStack {
@@ -211,49 +200,94 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
-    private var fnKeySection: some View {
+    private var triggerSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Trigger Key")
+            Text("Dictation Trigger")
                 .font(.headline)
 
-            HStack(spacing: 16) {
-                Text(appState.triggerKey.keyLabel)
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .frame(width: 32, height: 32)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.gray.opacity(0.2))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.gray.opacity(0.4), lineWidth: 1)
-                    )
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Hold \(appState.triggerKey.displayName) to record")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                    Text("Release to transcribe into any app")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    if appState.triggerKey == .spacebar {
-                        Text("Quick taps still type a normal space")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+            bindingRow(
+                title: "Keyboard",
+                bindingName: appState.isCapturingKeyboardBinding ? "Press any shortcut…" : appState.keyboardBinding.displayName,
+                isEnabled: Binding(
+                    get: { appState.keyboardBindingEnabled },
+                    set: { appState.setKeyboardBindingEnabled($0) }
+                ),
+                isCapturing: appState.isCapturingKeyboardBinding,
+                bindAction: {
+                    if appState.isCapturingKeyboardBinding {
+                        appState.cancelKeyboardBindingCapture()
+                    } else {
+                        appState.beginKeyboardBindingCapture()
                     }
                 }
+            )
 
+            bindingRow(
+                title: "Mouse",
+                bindingName: appState.isCapturingMouseButton ? "Press an auxiliary button…" : "Mouse Button \(appState.mouseButtonNumber + 1)",
+                isEnabled: Binding(
+                    get: { appState.mouseBindingEnabled },
+                    set: { appState.setMouseBindingEnabled($0) }
+                ),
+                isCapturing: appState.isCapturingMouseButton,
+                bindAction: {
+                    if appState.isCapturingMouseButton {
+                        appState.cancelMouseButtonCapture()
+                    } else {
+                        appState.beginMouseButtonCapture()
+                    }
+                }
+            )
+
+            HStack {
+                Text("Behaviour")
                 Spacer()
-
-                Picker("", selection: $appState.triggerKey) {
-                    ForEach(TriggerKey.allCases, id: \.self) { key in
-                        Text(key.displayName).tag(key)
+                Picker("Behaviour", selection: $appState.triggerMode) {
+                    ForEach(TriggerMode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
                     }
                 }
                 .labelsHidden()
-                .frame(width: 110)
+                .pickerStyle(.segmented)
+                .frame(width: 180)
+            }
+
+            Text(appState.triggerInstruction)
+                .font(.subheadline)
+                .fontWeight(.medium)
+            Text(appState.triggerMode == .hold ? "Release to transcribe. Press Escape to cancel." : "Press again to transcribe. Press Escape to cancel.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            if !appState.keyboardBindingEnabled && !appState.mouseBindingEnabled {
+                Text("Enable at least one binding to start dictation.")
+                    .font(.caption)
+                    .foregroundColor(.orange)
             }
         }
+    }
+
+    private func bindingRow(
+        title: String,
+        bindingName: String,
+        isEnabled: Binding<Bool>,
+        isCapturing: Bool,
+        bindAction: @escaping () -> Void
+    ) -> some View {
+        HStack(spacing: 12) {
+            Toggle("", isOn: isEnabled)
+                .labelsHidden()
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.subheadline).fontWeight(.medium)
+                Text(bindingName).font(.caption).foregroundColor(.secondary)
+            }
+            Spacer()
+            Button(isCapturing ? "Cancel" : "Change…", action: bindAction)
+                .buttonStyle(.bordered)
+        }
+        .padding(8)
+        .background(Color.gray.opacity(0.08))
+        .cornerRadius(6)
     }
 }
 
