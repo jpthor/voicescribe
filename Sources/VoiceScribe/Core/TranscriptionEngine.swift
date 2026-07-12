@@ -1,4 +1,5 @@
 import Foundation
+import FluidAudio
 import VoiceScribeCore
 
 #if arch(arm64)
@@ -17,7 +18,7 @@ enum TranscriptionError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .modelNotLoaded:
-            return "Whisper model not loaded"
+            return "Speech recognition model not loaded"
         case .transcriptionFailed(let message):
             return "Transcription failed: \(message)"
         case .noAudioData:
@@ -47,7 +48,7 @@ final class TranscriptionEngine: ObservableObject {
     @Published var downloadingModel: String?
     @Published var modelInfos: [ModelInfo] = []
 
-    @Published var selectedModel: String = "tiny" {
+    @Published var selectedModel: String = ModelMetadata.defaultModel {
         didSet {
             UserDefaults.standard.set(selectedModel, forKey: "selectedModel")
         }
@@ -55,9 +56,16 @@ final class TranscriptionEngine: ObservableObject {
 
     #if arch(arm64)
     private var whisperKit: WhisperKit?
+    private var unifiedAsr: UnifiedAsrManager?
     static let availableModels = ModelMetadata.availableModels
     static let modelBasePath = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Library/Caches/WhisperKit/models/argmaxinc/whisperkit-coreml")
+    static let parakeetModelPath = FileManager.default.urls(
+        for: .applicationSupportDirectory,
+        in: .userDomainMask
+    ).first!
+        .appendingPathComponent("FluidAudio/Models")
+        .appendingPathComponent(Repo.parakeetUnified.folderName)
     #else
     private var whisper: Whisper?
     static let availableModels = ["tiny", "base", "small", "medium"]
@@ -77,7 +85,11 @@ final class TranscriptionEngine: ObservableObject {
            Self.availableModels.contains(saved) {
             selectedModel = saved
         } else {
+            #if arch(arm64)
+            selectedModel = ModelMetadata.defaultModel
+            #else
             selectedModel = "tiny"
+            #endif
         }
         refreshModelInfos()
     }
@@ -99,6 +111,9 @@ final class TranscriptionEngine: ObservableObject {
 
     func modelPath(_ model: String) -> URL {
         #if arch(arm64)
+        if model == ModelMetadata.defaultModel {
+            return Self.parakeetModelPath
+        }
         return Self.modelBasePath.appendingPathComponent("openai_whisper-\(model)")
         #else
         return Self.modelBasePath.appendingPathComponent("ggml-\(model).bin")
@@ -106,8 +121,39 @@ final class TranscriptionEngine: ObservableObject {
     }
 
     func isModelDownloaded(_ model: String) -> Bool {
-        FileManager.default.fileExists(atPath: modelPath(model).path)
+        #if arch(arm64)
+        if model == ModelMetadata.defaultModel {
+            let directory = modelPath(model)
+            return ModelNames.ParakeetUnified.requiredModels(variant: "offline")
+                .allSatisfy { filename in
+                    FileManager.default.fileExists(
+                        atPath: directory.appendingPathComponent(filename).path
+                    )
+                }
+        }
+        return isWhisperModelComplete(at: modelPath(model))
+        #else
+        return FileManager.default.fileExists(atPath: modelPath(model).path)
+        #endif
     }
+
+    #if arch(arm64)
+    private func isWhisperModelComplete(at directory: URL) -> Bool {
+        let requiredFiles = [
+            "config.json",
+            "generation_config.json",
+            "AudioEncoder.mlmodelc/weights/weight.bin",
+            "MelSpectrogram.mlmodelc/weights/weight.bin",
+            "TextDecoder.mlmodelc/weights/weight.bin"
+        ]
+        return requiredFiles.allSatisfy { relativePath in
+            let path = directory.appendingPathComponent(relativePath).path
+            guard let attributes = try? FileManager.default.attributesOfItem(atPath: path),
+                  let size = attributes[.size] as? NSNumber else { return false }
+            return size.int64Value > 0
+        }
+    }
+    #endif
 
     func modelSize(_ model: String) -> String? {
         let path = modelPath(model)
@@ -131,6 +177,37 @@ final class TranscriptionEngine: ObservableObject {
         downloadProgress = 0
 
         #if arch(arm64)
+        if model == ModelMetadata.defaultModel {
+            do {
+                let path = modelPath(model)
+                if FileManager.default.fileExists(atPath: path.path),
+                   !isModelDownloaded(model) {
+                    try FileManager.default.removeItem(at: path)
+                }
+                let manager = UnifiedAsrManager(encoderPrecision: .int8)
+                try await manager.loadModels { [weak self] progress in
+                    Task { @MainActor in
+                        self?.downloadProgress = progress.fractionCompleted
+                    }
+                }
+                unifiedAsr = manager
+                whisperKit = nil
+                selectedModel = model
+                isModelLoaded = true
+                refreshModelInfos()
+            } catch {
+                isDownloading = false
+                downloadingModel = nil
+                downloadProgress = 0
+                throw TranscriptionError.downloadFailed(error.localizedDescription)
+            }
+
+            isDownloading = false
+            downloadingModel = nil
+            downloadProgress = 0
+            return
+        }
+
         do {
             let _ = try await WhisperKit.download(
                 variant: model,
@@ -142,6 +219,11 @@ final class TranscriptionEngine: ObservableObject {
                     }
                 }
             )
+            guard isWhisperModelComplete(at: modelPath(model)) else {
+                throw TranscriptionError.downloadFailed(
+                    "The model download is incomplete. Please try downloading it again."
+                )
+            }
             refreshModelInfos()
         } catch {
             isDownloading = false
@@ -195,6 +277,7 @@ final class TranscriptionEngine: ObservableObject {
         if selectedModel == model && isModelLoaded {
             #if arch(arm64)
             whisperKit = nil
+            unifiedAsr = nil
             #else
             whisper = nil
             #endif
@@ -214,6 +297,24 @@ final class TranscriptionEngine: ObservableObject {
         loadingProgress = 0
 
         #if arch(arm64)
+        if selectedModel == ModelMetadata.defaultModel {
+            let manager = UnifiedAsrManager(encoderPrecision: .int8)
+            do {
+                try await manager.loadModels()
+                unifiedAsr = manager
+                whisperKit = nil
+                isModelLoaded = true
+                loadingProgress = 1.0
+                isLoading = false
+                return
+            } catch {
+                unifiedAsr = nil
+                isModelLoaded = false
+                isLoading = false
+                throw TranscriptionError.transcriptionFailed(error.localizedDescription)
+            }
+        }
+
         let modelFolder = modelPath(selectedModel).path
         let computeOptions = ModelComputeOptions()
 
@@ -251,6 +352,17 @@ final class TranscriptionEngine: ObservableObject {
 
     func transcribe(audioSamples: [Float]) async throws -> String {
         #if arch(arm64)
+        if selectedModel == ModelMetadata.defaultModel {
+            guard let unifiedAsr, isModelLoaded else {
+                throw TranscriptionError.modelNotLoaded
+            }
+            guard !audioSamples.isEmpty else {
+                throw TranscriptionError.noAudioData
+            }
+            return try await unifiedAsr.transcribe(audioSamples)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
         guard let whisperKit = whisperKit, isModelLoaded else {
             throw TranscriptionError.modelNotLoaded
         }
@@ -259,7 +371,17 @@ final class TranscriptionEngine: ObservableObject {
             throw TranscriptionError.noAudioData
         }
 
-        let results = try await whisperKit.transcribe(audioArray: audioSamples)
+        // VoiceScribe is English-only and inserts plain text, so avoid language
+        // detection and timestamp-token decoding that the UI never consumes.
+        let decodeOptions = DecodingOptions(
+            language: "en",
+            detectLanguage: false,
+            withoutTimestamps: true
+        )
+        let results = try await whisperKit.transcribe(
+            audioArray: audioSamples,
+            decodeOptions: decodeOptions
+        )
         let text = results.compactMap { $0.text }.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
         return text
         #else
@@ -278,16 +400,27 @@ final class TranscriptionEngine: ObservableObject {
     }
 
     func changeModel(to model: String) async throws {
+        let previousModel = selectedModel
         selectedModel = model
         isModelLoaded = false
         #if arch(arm64)
         whisperKit = nil
+        unifiedAsr = nil
         #else
         whisper = nil
         #endif
 
-        if isModelDownloaded(model) {
+        do {
+            guard isModelDownloaded(model) else {
+                throw TranscriptionError.modelNotLoaded
+            }
             try await loadModel()
+        } catch {
+            selectedModel = previousModel
+            if isModelDownloaded(previousModel) {
+                try? await loadModel()
+            }
+            throw error
         }
     }
 

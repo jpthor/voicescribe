@@ -1,0 +1,30 @@
+Good morning, can you send me the updated report before lunch?
+Yeah, nah, I reckon we should leave it until tomorrow.
+Could you grab a flat white and a toasted ham and cheese sandwich?
+The weather in Sydney is meant to clear up this arvo.
+I'll meet you outside Flinders Street Station at half past six.
+Please book the table for four people under the name Thorbjornsen.
+The delivery needs to go from Parramatta to Woolloomooloo.
+We drove through Wagga Wagga, Canberra, and Albury on the way home.
+The next appointment is Tuesday, the fourteenth of July, at three forty-five p.m.
+The final amount was twelve thousand four hundred and eighty dollars and seventy-five cents.
+My mobile number ends in zero four seven two, nine one six, three eight five.
+Set a reminder for twenty minutes from now called check the barbecue.
+Email James and ask whether the M4 Max benchmark is ready.
+Open System Settings, select Privacy and Security, then choose Microphone.
+Run git status, create a new branch, and commit the Package dot resolved file.
+The API returned a four hundred and three forbidden response after the token expired.
+Deploy the Swift package to the Mac mini, but don't restart Home Assistant.
+The WireGuard tunnel connects through NordVPN and routes traffic to the UniFi gateway.
+Update the YAML configuration, validate it, and roll back if the health check fails.
+The variable is called transcription engine, and the function returns an array of floating-point samples.
+JP said the local model should be quick enough for everyday dictation.
+Superwhisper is accurate, but I'd rather keep the audio entirely on this Mac.
+Parakeet Unified should handle punctuation, capitalisation, and ordinary English dictation.
+Please distinguish between fifteen, fifty, and fifteen fifty.
+There were sixty-six successful requests, sixteen warnings, and six failures.
+She sells seashells by the seashore, but the shells she sells are surely seashells.
+After I finished the meeting, I wrote down the action items, sent the follow-up, and archived the notes.
+Although the first version worked reasonably well, the second version was noticeably faster and made fewer mistakes.
+If the transcription contains an unfamiliar surname, preserve what I said instead of replacing it with a common word.
+Right, so what I'm thinking is we test this locally for a week, compare the errors with Superwhisper, and then decide whether it's good enough to replace the subscription.

@@ -8,7 +8,7 @@ struct OnboardingView: View {
     @ObservedObject var permissionManager: PermissionManager
     @Environment(\.dismiss) private var dismiss
     @State private var currentStep = 0
-    @State private var hasStartedTinyDownload = false
+    @State private var hasStartedDefaultModelDownload = false
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     init(appState: AppState) {
@@ -21,7 +21,7 @@ struct OnboardingView: View {
         OnboardingStep(
             icon: "folder.fill",
             title: "Files & Folders",
-            description: "Required to download and store Whisper speech recognition models locally on your Mac. Allow access when prompted.",
+            description: "Required to download and store speech recognition models locally on your Mac. Allow access when prompted.",
             permissionKey: "storage"
         ),
         OnboardingStep(
@@ -72,17 +72,18 @@ struct OnboardingView: View {
         .frame(width: 450, height: 580)
         .onAppear {
             permissionManager.checkAllPermissions()
-            startTinyDownloadIfNeeded()
+            startDefaultModelDownloadIfNeeded()
         }
     }
 
-    private func startTinyDownloadIfNeeded() {
-        guard !hasStartedTinyDownload else { return }
-        guard !appState.transcriptionEngine.isModelDownloaded("tiny") else { return }
+    private func startDefaultModelDownloadIfNeeded() {
+        let model = ModelMetadata.defaultModel
+        guard !hasStartedDefaultModelDownload else { return }
+        guard !appState.transcriptionEngine.isModelDownloaded(model) else { return }
 
-        hasStartedTinyDownload = true
+        hasStartedDefaultModelDownload = true
         Task {
-            try? await appState.transcriptionEngine.downloadModel("tiny")
+            try? await appState.transcriptionEngine.downloadModel(model)
         }
     }
 
@@ -111,7 +112,7 @@ struct OnboardingView: View {
         VStack(spacing: 16) {
             stepIndicator
 
-            Text("Local speech-to-text transcription powered by WhisperKit. All processing happens on-device.")
+            Text("Local English speech-to-text powered by Parakeet Unified. All processing happens on-device.")
                 .font(.body)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -120,7 +121,7 @@ struct OnboardingView: View {
             // Fn key usage instruction
             VStack(spacing: 12) {
                 HStack(spacing: 16) {
-                    Text(appState.triggerKey.keyLabel)
+                    Image(systemName: "keyboard.badge.ellipsis")
                         .font(.system(size: 18, weight: .medium, design: .rounded))
                         .frame(width: 44, height: 44)
                         .background(
@@ -133,9 +134,9 @@ struct OnboardingView: View {
                         )
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Hold \(appState.triggerKey.displayName) to record")
+                        Text(appState.triggerInstruction)
                             .font(.headline)
-                        Text("Release to transcribe into any app")
+                        Text("Finish the trigger to transcribe; Escape cancels")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
@@ -233,7 +234,7 @@ struct OnboardingView: View {
                             // since Input Monitoring will restart the app
                             UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
                             UserDefaults.standard.set(true, forKey: "inputMonitoringRequested")
-                            appState.transcriptionEngine.selectedModel = "tiny"
+                            appState.transcriptionEngine.selectedModel = ModelMetadata.defaultModel
                             permissionManager.openSystemPreferences(for: "inputMonitoring")
                         }) {
                             Label("Open System Settings", systemImage: "gear")

@@ -1,6 +1,7 @@
 import Foundation
 import CoreGraphics
 import Carbon.HIToolbox
+import VoiceScribeCore
 
 /// Monitors spacebar press/release via CGEventTap.
 /// Suppresses the space character during recording and synthesises
@@ -9,6 +10,7 @@ final class SpacebarMonitor {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private let onKeyStateChanged: (Bool) -> Void
+    private let triggerMode: TriggerMode
 
     /// Sentinel value on synthesised events so we don't re-intercept them.
     private static let sentinelTag: Int64 = 0x56_53  // "VS"
@@ -18,7 +20,8 @@ final class SpacebarMonitor {
     private var activated = false
     private var activationTimer: DispatchWorkItem?
 
-    init(onKeyStateChanged: @escaping (Bool) -> Void) {
+    init(triggerMode: TriggerMode, onKeyStateChanged: @escaping (Bool) -> Void) {
+        self.triggerMode = triggerMode
         self.onKeyStateChanged = onKeyStateChanged
     }
 
@@ -105,6 +108,12 @@ final class SpacebarMonitor {
         isHeld = true
         activated = false
 
+        if triggerMode == .toggle {
+            activated = true
+            onKeyStateChanged(true)
+            return nil
+        }
+
         // Schedule activation
         let timer = DispatchWorkItem { [weak self] in
             self?.activate()
@@ -126,9 +135,11 @@ final class SpacebarMonitor {
         activationTimer = nil
 
         if activated {
-            // Was recording — stop, suppress the key-up
+            // Hold mode stops on release. Toggle mode stops on the next press.
             activated = false
-            onKeyStateChanged(false)
+            if triggerMode == .hold {
+                onKeyStateChanged(false)
+            }
             return nil
         } else {
             // Quick tap — synthesise a normal space character

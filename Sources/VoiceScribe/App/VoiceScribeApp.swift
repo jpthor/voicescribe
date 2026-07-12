@@ -23,7 +23,7 @@ struct VoiceScribeApp: App {
         Window("VoiceScribe", id: "settings") {
             SettingsView(appState: appState)
         }
-        .windowResizability(.contentSize)
+        .defaultSize(width: 520, height: 640)
     }
 
     private var menuBarIcon: String {
